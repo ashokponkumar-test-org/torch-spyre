@@ -11,17 +11,15 @@ If you are within IBM, instructions can be found in the internal `#aiu-inductor`
 
 Non-interactive, simple script:
 
-```
+```bash
 python3 -m pytest tests/
-
 python3 examples/tensor_allocate.py
-
 python3 examples/softmax.py
 ```
 
 Interactive:
 
-```
+```python
 python3
 >>> import torch
 >>> x = torch.tensor([1,2], dtype=torch.float16, device="spyre")
