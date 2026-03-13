@@ -1,13 +1,18 @@
-name: PR Commit - Unit Tests
-run_name: "PR #${{ github.event.pull_request.number || github.run_number }} - Unit Tests (${{ github.actor }})"
+name: Nightly CI
+run_name: "Nightly ${{ github.run_id }} (${{ github.sha }})"
 
 on:
-  workflow_dispatch: null
-  pull_request:
-    branches: [main]
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: "Reason for manual trigger"
+        required: false
+        default: "manual"
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 defaults:
@@ -19,8 +24,34 @@ permissions:
   checks: write
 
 jobs:
-  test:
-    name: Run unit tests
+  linters:
+    name: Linters
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: '3.12'
+      - name: Install uv
+        uses: astral-sh/setup-uv@eac588ad8def6316056a12d4907a9d4d84ff7a3b # v7.1.3
+        with:
+          enable-cache: true
+          cache-dependency-glob: requirements/*
+      - run: uv venv
+      - name: Install pre-commit
+        run: uv pip install -r requirements/lint.txt # uv detects the virtual env
+      - run: echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
+      - name: Restore/Cache pre-commit environment
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
+
+      - name: Run pre-commit
+        run: pre-commit run --all-files
+
+  tests:
+    name: Unit Tests
     runs-on: ashok-test-org-aiu-x86-64-arc-runner-set
     timeout-minutes: 30
     env:
