@@ -1,26 +1,25 @@
-name: PR Commit - Unit Tests
-run_name: "PR #${{ github.event.pull_request.number || github.run_number }} - Unit Tests (${{ github.actor }})"
+name: Diagnostic Run
 
 on:
-  workflow_dispatch: null
-  pull_request:
-    branches: [main]
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
-
-defaults:
-  run:
-    shell: bash
-
-permissions:
-  contents: read
-  checks: write
+  workflow_dispatch:
+    inputs:
+      test_name:
+        description: "Failing test name (passed to pytest -k)"
+        required: true
+        type: string
+      commit_sha:
+        description: "Exact commit SHA to run against"
+        required: true
+        type: string
+      repeat_count:
+        description: "Number of repetitions (flakiness detection)"
+        required: false
+        default: "3"
+        type: string
 
 jobs:
-  test:
-    name: Run unit tests
+  diagnostic:
+    name: Diagnostic — ${{ inputs.test_name }}
     runs-on: ashok-test-org-aiu-x86-64-arc-runner-set
     timeout-minutes: 30
     env:
@@ -39,8 +38,10 @@ jobs:
       HOME: /dev/shm
       OMP_NUM_THREADS: '192'
     steps:
-      - name: Checkout repository
+      - name: Checkout specific commit
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit_sha }}
 
       - name: Print environment info
         run: |-
@@ -56,15 +57,20 @@ jobs:
           python3 -m pip install --upgrade pip
           pip install -e . --no-deps --no-build-isolation -v
 
-      - name: Run unit tests
-        run: |-
-          pytest tests/ -v --tb=short --junit-xml=pytest-results.xml
+      - name: Run test ${{ inputs.repeat_count }}x for flakiness detection
+        run: |
+          for i in $(seq 1 ${{ inputs.repeat_count }}); do
+            echo "=== Run $i / ${{ inputs.repeat_count }} ==="
+            pytest tests/ -k "${{ inputs.test_name }}" \
+              --junit-xml=pytest-results-run-$i.xml \
+              -v || true
+          done
         continue-on-error: true
 
-      - name: Upload test results
+      - name: Upload diagnostic results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pytest-results
-          path: pytest-results.xml
+          name: diagnostic-${{ inputs.test_name }}-${{ inputs.commit_sha }}
+          path: pytest-results-run-*.xml
           retention-days: 30

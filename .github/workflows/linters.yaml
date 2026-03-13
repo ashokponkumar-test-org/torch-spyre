@@ -1,9 +1,7 @@
-name: linters
+name: PR Commit - Linters
+run_name: "PR #${{ github.event.pull_request.number }} - Linters (${{ github.actor }})"
 
 on:
-  push:
-    branches: [main]
-    tags: ['*']
   pull_request:
     branches: [main]
 
